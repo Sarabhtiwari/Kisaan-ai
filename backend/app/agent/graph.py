@@ -2,12 +2,8 @@ from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
 from app.agent.supervisor import supervisor_node
 from app.agent.synthesizer import synthesizer_node
-
+from app.tools.disease_detection import disease_node
 # --- Tool nodes (simple for now, we upgrade these one by one) ---
-
-def disease_node(state: AgentState) -> AgentState:
-    state["tool_result"] = "Image analysis tool coming soon. For now: check for fungal infection if you see yellow or brown spots. Use neem oil spray."
-    return state
 
 def weather_node(state: AgentState) -> AgentState:
     import httpx
