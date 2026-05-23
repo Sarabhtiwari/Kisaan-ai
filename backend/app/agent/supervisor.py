@@ -9,24 +9,33 @@ llm = ChatGroq(
     temperature=0
 )
 
-SUPERVISOR_PROMPT = """You are a routing assistant. Read the farmer's message and reply with ONLY one word from this list:
+SUPERVISOR_PROMPT = """You are a routing assistant. Read the farmer's message and reply with ONLY one word:
 
-- disease     → farmer mentions crop disease, pest, yellowing, spots, insects, damage, or sends a photo
-- weather     → farmer asks about rain, weather, temperature, irrigation timing
-- mandi       → farmer asks about price, rate, mandi, market, sell, crop value
-- schemes     → farmer asks about government scheme, subsidy, loan, PM Kisan, registration
+- disease     → crop disease, pest, yellowing, spots, insects, damage, photo
+- weather     → rain, weather, temperature, irrigation timing
+- mandi       → price, rate, mandi, market, sell, crop value
+- schemes     → government scheme, subsidy, loan, PM Kisan, registration
 - general     → everything else
 
-Reply with ONLY that one word. No explanation. No punctuation. Just the word."""
+Reply with ONLY that one word. Nothing else."""
 
 def supervisor_node(state: AgentState) -> AgentState:
+    # Build context from last 4 messages
+    history_text = ""
+    if state.get("chat_history"):
+        history_text = "\nPrevious conversation:\n"
+        for msg in state["chat_history"][-4:]:
+            role = "Farmer" if msg["role"] == "user" else "AI"
+            history_text += f"{role}: {msg['content']}\n"
+
+    full_message = f"{history_text}\nCurrent message: {state['message']}"
+
     response = llm.invoke([
         SystemMessage(content=SUPERVISOR_PROMPT),
-        HumanMessage(content=state["message"])
+        HumanMessage(content=full_message)
     ])
 
     decision = response.content.strip().lower()
-
     valid = {"disease", "weather", "mandi", "schemes", "general"}
     if decision not in valid:
         decision = "general"

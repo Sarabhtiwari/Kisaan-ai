@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import { sendMessage } from "./api"
 
 function App() {
+  const [sessionId] = useState("farmer_" + Math.random().toString(36).substr(2, 9))
   const [messages, setMessages] = useState([
     {
       role: "ai",
@@ -62,7 +63,7 @@ function App() {
     setLoading(true)
 
     try {
-      const data = await sendMessage(userMessage, language, imageBase64)
+      const data = await sendMessage(sessionId, userMessage, language, imageBase64)
 
       // Add AI response to chat
       setMessages(prev => [...prev, {
