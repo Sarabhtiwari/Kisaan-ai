@@ -3,6 +3,7 @@ from app.agent.state import AgentState
 from app.agent.supervisor import supervisor_node
 from app.agent.synthesizer import synthesizer_node
 from app.tools.disease_detection import disease_node
+from app.tools.schemes_rag import schemes_rag_tool
 # --- Tool nodes (simple for now, we upgrade these one by one) ---
 
 def weather_node(state: AgentState) -> AgentState:
@@ -77,8 +78,7 @@ def mandi_node(state: AgentState) -> AgentState:
     return state
 
 def schemes_node(state: AgentState) -> AgentState:
-    state["tool_result"] = "Government schemes tool coming soon. Key schemes: PM Kisan (6000/year), Fasal Bima Yojana (crop insurance), KCC (Kisan Credit Card)."
-    return state
+    return schemes_rag_tool(state)
 
 def general_node(state: AgentState) -> AgentState:
     from app.config import GROQ_API_KEY
