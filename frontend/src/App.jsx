@@ -1,85 +1,127 @@
-import { useState, useRef, useEffect } from "react"
-import { sendMessage } from "./api"
+import { useState, useRef, useEffect } from "react";
+import { sendMessage } from "./api";
 
 function App() {
-  const [sessionId] = useState("farmer_" + Math.random().toString(36).substr(2, 9))
+  const [sessionId] = useState(
+    "farmer_" + Math.random().toString(36).substr(2, 9),
+  );
   const [messages, setMessages] = useState([
     {
       role: "ai",
-      text: "नमस्ते किसान जी! मैं किसान AI हूँ। आप मुझसे फसल, मौसम, मंडी भाव या सरकारी योजनाओं के बारे में पूछ सकते हैं।"
-    }
-  ])
-  const [input, setInput] = useState("")
-  const [language, setLanguage] = useState("hi")
-  const [loading, setLoading] = useState(false)
-  const [image, setImage] = useState(null)
-  const [imageBase64, setImageBase64] = useState(null)
-  const bottomRef = useRef(null)
-  const fileRef = useRef(null)
+      text: "नमस्ते किसान जी! मैं किसान AI हूँ। आप मुझसे फसल, मौसम, मंडी भाव या सरकारी योजनाओं के बारे में पूछ सकते हैं।",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [language, setLanguage] = useState("hi");
+  const [loading, setLoading] = useState(false);
+  const [image, setImage] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
+  const bottomRef = useRef(null);
+  const fileRef = useRef(null);
 
   // Auto scroll to bottom on new message
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   // Convert image to base64 when farmer selects one
   function handleImageSelect(e) {
-    const file = e.target.files[0]
-    if (!file) return
+    const file = e.target.files[0];
+    if (!file) return;
 
-    setImage(URL.createObjectURL(file))
+    setImage(URL.createObjectURL(file));
 
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = () => {
       // Remove the "data:image/jpeg;base64," prefix
-      const base64 = reader.result.split(",")[1]
-      setImageBase64(base64)
-    }
-    reader.readAsDataURL(file)
+      const base64 = reader.result.split(",")[1];
+      setImageBase64(base64);
+    };
+    reader.readAsDataURL(file);
   }
 
   // Remove selected image
   function removeImage() {
-    setImage(null)
-    setImageBase64(null)
-    fileRef.current.value = ""
+    setImage(null);
+    setImageBase64(null);
+    fileRef.current.value = "";
   }
 
   // Send message to backend
   async function handleSend() {
-    if (!input.trim() && !imageBase64) return
-    if (loading) return
+    if (!input.trim() && !imageBase64) return;
+    if (loading) return;
 
-    const userMessage = input.trim()
+    const userMessage = input.trim();
 
     // Add farmer message to chat
-    setMessages(prev => [...prev, {
-      role: "user",
-      text: userMessage || "📷 Photo sent for analysis",
-      image: image
-    }])
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text: userMessage || "📷 Photo sent for analysis",
+        image: image,
+      },
+    ]);
 
-    setInput("")
-    setLoading(true)
+    setInput("");
+    setLoading(true);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "ai",
+        text: "",
+        tool: "",
+      },
+    ]);
 
     try {
-      const data = await sendMessage(sessionId, userMessage, language, imageBase64)
-
-      // Add AI response to chat
-      setMessages(prev => [...prev, {
-        role: "ai",
-        text: data.reply,
-        tool: data.tool_used
-      }])
-
+      const data = await sendMessage(
+        sessionId,
+        userMessage,
+        language,
+        imageBase64,
+      
+// onChunk — append each word to last message
+        (chunk) => {
+          setMessages(prev => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            updated[updated.length - 1] = {
+              ...last,
+              text: last.text + chunk
+            }
+            return updated
+          })
+        },
+// onTool — set tool name on last message
+        (tool) => {
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              tool: tool
+            }
+            return updated
+          })
+        },
+        () => {
+          setLoading(false)
+        }
+      );
+      
     } catch (error) {
-      setMessages(prev => [...prev, {
-        role: "ai",
-        text: "माफ करें, कुछ गड़बड़ हो गई। कृपया दोबारा कोशिश करें।"
-      }])
+      setMessages(prev => {
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          text: "माफ करें, कुछ गड़बड़ हो गई। कृपया दोबारा कोशिश करें।"
+        }
+        return updated
+      })
+      setLoading(false)
     }
-
-    setLoading(false)
     setImage(null)
     setImageBase64(null)
     if (fileRef.current) fileRef.current.value = ""
@@ -88,17 +130,15 @@ function App() {
   // Send on Enter key
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
   }
 
   return (
     <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center p-4">
-
       {/* Chat Container */}
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl flex flex-col h-[90vh]">
-
         {/* Header */}
         <div className="bg-green-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
           <div>
@@ -109,7 +149,7 @@ function App() {
           {/* Language Selector */}
           <select
             value={language}
-            onChange={e => setLanguage(e.target.value)}
+            onChange={(e) => setLanguage(e.target.value)}
             className="bg-green-700 text-white text-sm rounded-lg px-3 py-1 border border-green-500"
           >
             <option value="hi">हिंदी</option>
@@ -146,9 +186,7 @@ function App() {
 
                 {/* Show which tool was used */}
                 {msg.tool && (
-                  <p className="text-xs mt-1 opacity-60">
-                    🔧 {msg.tool}
-                  </p>
+                  <p className="text-xs mt-1 opacity-60">🔧 {msg.tool}</p>
                 )}
               </div>
             </div>
@@ -189,7 +227,6 @@ function App() {
 
         {/* Input Bar */}
         <div className="px-4 py-3 border-t border-gray-200 flex items-center gap-2">
-
           {/* Image Upload Button */}
           <button
             onClick={() => fileRef.current.click()}
@@ -210,7 +247,7 @@ function App() {
           <input
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="अपना सवाल यहाँ लिखें..."
             className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-green-500"
@@ -225,10 +262,9 @@ function App() {
             भेजें
           </button>
         </div>
-
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
