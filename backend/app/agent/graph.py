@@ -4,6 +4,7 @@ from app.agent.supervisor import supervisor_node
 from app.agent.synthesizer import synthesizer_node
 from app.tools.disease_detection import disease_node
 from app.tools.schemes_rag import schemes_rag_tool
+from app.tools.web_search import web_search_tool
 # --- Tool nodes (simple for now, we upgrade these one by one) ---
 
 def weather_node(state: AgentState) -> AgentState:
@@ -112,25 +113,27 @@ def build_graph():
     graph.add_node("schemes",     schemes_node)
     graph.add_node("general",     general_node)
     graph.add_node("synthesizer", synthesizer_node)
+    graph.add_node("web_search", web_search_tool)
 
     # Entry point
     graph.set_entry_point("supervisor")
 
     # Supervisor routes to correct tool
     graph.add_conditional_edges(
-        "supervisor",
-        lambda state: state["tool_to_use"],
-        {
-            "disease":  "disease",
-            "weather":  "weather",
-            "mandi":    "mandi",
-            "schemes":  "schemes",
-            "general":  "general",
-        }
-    )
+    "supervisor",
+    lambda state: state["tool_to_use"],
+    {
+        "disease":    "disease",
+        "weather":    "weather",
+        "mandi":      "mandi",
+        "schemes":    "schemes",
+        "general":    "general",
+        "web_search": "web_search",    # ADD THIS LINE
+    }
+)
 
     # Every tool goes to synthesizer after
-    for tool in ["disease", "weather", "mandi", "schemes", "general"]:
+    for tool in ["disease", "weather", "mandi", "schemes", "general", "web_search"]:
         graph.add_edge(tool, "synthesizer")
 
     # Synthesizer is the last step
