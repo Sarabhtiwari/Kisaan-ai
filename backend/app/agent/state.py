@@ -1,12 +1,24 @@
-from typing import TypedDict, Optional, List
+from typing import TypedDict, Optional, List, Annotated
+import operator
+
+def keep_last(a, b):
+    return b if b is not None else a
 
 class AgentState(TypedDict):
-    session_id:    str
-    message:       str
-    language:      str
-    image_base64:  Optional[str]
-    location:      Optional[dict]
-    chat_history:  List[dict]
-    tool_to_use:   Optional[str]
-    tool_result:   Optional[str]
-    final_reply:   Optional[str]
+    # Read-only fields — same value across all parallel nodes
+    session_id:    Annotated[str, keep_last]
+    message:       Annotated[str, keep_last]
+    language:      Annotated[str, keep_last]
+    image_base64:  Annotated[Optional[str], keep_last]
+    location:      Annotated[Optional[dict], keep_last]
+    chat_history:  Annotated[List[dict], keep_last]
+    tool_to_use:   Annotated[Optional[str], keep_last]
+    tools_to_use:  Annotated[List[str], keep_last]
+    final_reply:   Annotated[Optional[str], keep_last]
+
+    # tool_result kept for single tool compatibility
+    tool_result:   Annotated[Optional[str], keep_last]
+
+    # tool_results collects ALL parallel results
+    # operator.add appends each node's result to the list
+    tool_results:  Annotated[List[str], operator.add]

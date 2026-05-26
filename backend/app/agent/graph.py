@@ -1,17 +1,17 @@
 from langgraph.graph import StateGraph, END
+from langgraph.types import Send
 from app.agent.state import AgentState
 from app.agent.supervisor import supervisor_node
-# from app.agent.synthesizer import synthesizer_node
 from app.tools.disease_detection import disease_node
-from app.tools.schemes_rag import schemes_rag_tool
 from app.tools.web_search import web_search_tool
-# --- Tool nodes (simple for now, we upgrade these one by one) ---
+from app.tools.schemes_rag import schemes_rag_tool
+import httpx
+
+# --- Tool node functions ---
 
 def weather_node(state: AgentState) -> AgentState:
-    import httpx
     location = state.get("location") or {}
     city = location.get("city", "Lucknow")
-    
     try:
         response = httpx.get(f"https://wttr.in/{city}?format=j1", timeout=5)
         data = response.json()
@@ -19,10 +19,11 @@ def weather_node(state: AgentState) -> AgentState:
         temp = current["temp_C"]
         desc = current["weatherDesc"][0]["value"]
         humidity = current["humidity"]
-        state["tool_result"] = f"Temperature: {temp}°C, Weather: {desc}, Humidity: {humidity}%"
+        result = f"Temperature: {temp}°C, Weather: {desc}, Humidity: {humidity}%"
     except:
-        state["tool_result"] = "Weather data unavailable right now."
-    
+        result = "Weather data unavailable right now."
+    state["tool_result"] = result
+    state["tool_results"] = [result]
     return state
 
 def mandi_node(state: AgentState) -> AgentState:
@@ -45,101 +46,128 @@ def mandi_node(state: AgentState) -> AgentState:
         "chana": {"price": "4800-5100", "unit": "quintal", "trend": "stable"},
         "soybean": {"price": "3800-4000", "unit": "quintal", "trend": "rising"},
     }
-
     message = state["message"].lower()
     found = None
-
     for crop, data in mandi_data.items():
         if crop in message:
             found = (crop, data)
             break
-
     if found:
         crop_name, data = found
         trend_text = {
-            "rising": "बढ़ रहा है ↑",
-            "falling": "गिर रहा है ↓",
-            "stable": "स्थिर है →"
+            "rising": "badh raha hai ↑",
+            "falling": "gir raha hai ↓",
+            "stable": "sthir hai →"
         }.get(data["trend"], "")
-
-        state["tool_result"] = (
+        result = (
             f"{crop_name.capitalize()} ka bhav aaj Lucknow mandi mein: "
             f"Rs {data['price']} per {data['unit']}. "
-            f"Bhav {trend_text}. "
-            f"Sahi samay par bechne ke liye apne nazdiki mandi agent se sampark karein."
+            f"Bhav {trend_text}."
         )
     else:
-        state["tool_result"] = (
-            "Is fasal ka bhav abhi available nahi hai. "
-            "Kripaya gehu, chawal, makka, sarso, aloo, pyaz, tamatar, chana "
-            "mein se kisi ka naam likhein. "
-            "Ya agmarknet.nic.in par check karein."
-        )
-
+        result = "Is fasal ka bhav available nahi hai. gehu, chawal, sarso, aloo mein se koi naam likhein."
+    state["tool_result"] = result
+    state["tool_results"] = [result]
     return state
 
 def schemes_node(state: AgentState) -> AgentState:
-    return schemes_rag_tool(state)
+    result = schemes_rag_tool(state)
+    result["tool_results"] = [result["tool_result"]]
+    return result
 
 def general_node(state: AgentState) -> AgentState:
     from app.config import GROQ_API_KEY
     from langchain_groq import ChatGroq
     from langchain_core.messages import HumanMessage, SystemMessage
-    
     llm = ChatGroq(
         api_key=GROQ_API_KEY,
         model="llama-3.3-70b-versatile",
         temperature=0.4
     )
-    
     response = llm.invoke([
-        SystemMessage(content="You are an expert farming assistant for Indian farmers. Answer practically and simply."),
+        SystemMessage(content="You are an expert farming assistant for Indian farmers."),
         HumanMessage(content=state["message"])
     ])
-    
-    state["tool_result"] = response.content
+    result = response.content
+    state["tool_result"] = result
+    state["tool_results"] = [result]
     return state
+
+def disease_tool_node(state: AgentState) -> AgentState:
+    result = disease_node(state)
+    result["tool_results"] = [result["tool_result"]]
+    return result
+
+def web_search_node(state: AgentState) -> AgentState:
+    result = web_search_tool(state)
+    result["tool_results"] = [result["tool_result"]]
+    return result
+
+# --- Parallel routing function ---
+# This is the key function for parallelization
+# Instead of returning one node name, it returns
+# multiple Send objects — one per tool
+# LangGraph runs all of them simultaneously
+
+def route_to_tools(state: AgentState):
+    tools_to_use = state.get("tools_to_use", [])
+
+    # Map tool name to node name
+    tool_map = {
+        "weather":    "weather",
+        "mandi":      "mandi",
+        "disease":    "disease",
+        "schemes":    "schemes",
+        "general":    "general",
+        "web_search": "web_search",
+    }
+
+    if not tools_to_use:
+        return [Send("general", state)]
+
+    # Send to all matched tools simultaneously
+    return [
+        Send(tool_map.get(tool, "general"), state)
+        for tool in tools_to_use
+        if tool in tool_map
+    ]
 
 # --- Build the graph ---
 
 def build_graph():
     graph = StateGraph(AgentState)
 
-    # Add nodes
+    # Add all nodes
     graph.add_node("supervisor",  supervisor_node)
-    graph.add_node("disease",     disease_node)
     graph.add_node("weather",     weather_node)
     graph.add_node("mandi",       mandi_node)
+    graph.add_node("disease",     disease_tool_node)
     graph.add_node("schemes",     schemes_node)
     graph.add_node("general",     general_node)
-    # graph.add_node("synthesizer", synthesizer_node)
-    graph.add_node("web_search", web_search_tool)
+    graph.add_node("web_search",  web_search_node)
 
     # Entry point
     graph.set_entry_point("supervisor")
 
-    # Supervisor routes to correct tool
+    # Supervisor uses Send API to route to one or more tools
     graph.add_conditional_edges(
-    "supervisor",
-    lambda state: state["tool_to_use"],
-    {
-        "disease":    "disease",
-        "weather":    "weather",
-        "mandi":      "mandi",
-        "schemes":    "schemes",
-        "general":    "general",
-        "web_search": "web_search",    # ADD THIS LINE
-    }
-)
+        "supervisor",
+        route_to_tools,   # returns list of Send objects
+        [                 # all possible destination nodes
+            "weather",
+            "mandi",
+            "disease",
+            "schemes",
+            "general",
+            "web_search"
+        ]
+    )
 
-    # Every tool goes to synthesizer after
-    for tool in ["disease", "weather", "mandi", "schemes", "general", "web_search"]:
+    # All tools go to END
+    # Synthesizer is handled in chat.py for streaming
+    for tool in ["weather", "mandi", "disease", "schemes", "general", "web_search"]:
         graph.add_edge(tool, END)
-
-    # Synthesizer is the last step
-    # graph.add_edge("synthesizer", END)
 
     return graph.compile()
 
-# Compile once when server starts
 agent = build_graph()
