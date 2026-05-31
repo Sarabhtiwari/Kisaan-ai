@@ -1,3 +1,5 @@
+import app.config  
+# loads env vars and LangSmith setup first
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import chat
