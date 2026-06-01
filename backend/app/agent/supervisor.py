@@ -31,6 +31,16 @@ FORCED_ROUTING = {
     "schemes": [
         "yojana", "योजना", "scheme", "pm kisan", "subsidy",
         "sarkar", "सरकार", "loan", "registration", "apply"
+    ],
+    "khata": [
+        "kharcha", "खर्चा", "lagaya", "लगाया", "diya", "दिया",
+        "khata", "खाता", "hisab", "हिसाब", "profit", "नफा",
+        "loss", "nuksan", "नुकसान", "total", "kitna laga",
+        "majdoor", "मजदूर", "khad", "खाद", "beej", "बीज",
+        "paani", "पानी", "dawai", "दवाई", "tractor",
+        "bikri", "बिक्री", "karj", "कर्ज", "amdani", "आमदनी",
+        "faida", "फायदा", "khet", "खेत mein", "compare",
+        "season", "breakdown", "list dikhao", "kitna kamaya"
     ]
 }
 

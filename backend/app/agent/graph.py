@@ -3,6 +3,7 @@ from langgraph.types import Send
 from app.agent.state import AgentState
 from app.agent.supervisor import supervisor_node
 from app.tools.disease_detection import disease_node
+from app.tools.khata_tools import khata_node
 from app.tools.web_search import web_search_tool
 from app.tools.schemes_rag import schemes_rag_tool
 import httpx
@@ -120,6 +121,7 @@ def route_to_tools(state: AgentState):
         "schemes":    "schemes",
         "general":    "general",
         "web_search": "web_search",
+        "khata":      "khata",    
     }
 
     if not tools_to_use:
@@ -145,6 +147,7 @@ def build_graph():
     graph.add_node("schemes",     schemes_node)
     graph.add_node("general",     general_node)
     graph.add_node("web_search",  web_search_node)
+    graph.add_node("khata",       khata_node)
 
     # Entry point
     graph.set_entry_point("supervisor")
@@ -165,7 +168,7 @@ def build_graph():
 
     # All tools go to END
     # Synthesizer is handled in chat.py for streaming
-    for tool in ["weather", "mandi", "disease", "schemes", "general", "web_search"]:
+    for tool in ["weather", "mandi", "disease", "schemes", "general", "web_search", "khata"]:
         graph.add_edge(tool, END)
 
     return graph.compile()
