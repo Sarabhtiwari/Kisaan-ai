@@ -232,22 +232,28 @@ def format_expense_list(expenses: list) -> str:
 
 
 def khata_node(state: AgentState) -> AgentState:
-    """
-    Main LangGraph node for Khata feature.
-    
-    Flow:
-    1. Extract info from message using Groq
-    2. Check action type
-    3. Call correct DB function
-    4. Return formatted result
-    """
     session_id = state["session_id"]
     message = state["message"]
 
     # Step 1 — Extract structured info
     extracted = extract_khata_info(message)
 
-    # Step 2 — Handle incomplete info
+    # print(f"DEBUG extracted action: {extracted.action}")
+    # print(f"DEBUG extracted farm_name: {extracted.farm_name}")
+
+    # Step 2 — Python level fixes
+    # If get_summary but no farm_name → show all farms
+    if extracted.action == "get_summary" and not extracted.farm_name:
+        extracted.action = "all_farms"
+
+    # If compare but only one farm → get_summary instead
+    if extracted.action == "compare" and not extracted.farm_names:
+        if extracted.farm_name:
+            extracted.action = "get_summary"
+        else:
+            extracted.action = "all_farms"
+
+    # Step 3 — Handle incomplete info
     if extracted.action == "add_expense":
         missing = []
         if not extracted.farm_name:
@@ -262,16 +268,15 @@ def khata_node(state: AgentState) -> AgentState:
             state["tool_result"] = f"Kripaya batayen: {missing_text}?"
             state["tool_results"] = [state["tool_result"]]
             return state
-    
+
     if extracted.action == "incomplete" or extracted.missing_fields:
         state["tool_result"] = extracted.follow_up_question or "Kripaya khet ka naam, amount aur kharche ka karan batayen."
         state["tool_results"] = [state["tool_result"]]
         return state
 
-    # Step 3 — Route to correct operation
+    # Step 4 — Route to correct operation
     result_text = ""
 
-    # ADD EXPENSE
     if extracted.action == "add_expense":
         saved = save_expense(
             session_id=session_id,
@@ -287,17 +292,15 @@ def khata_node(state: AgentState) -> AgentState:
         if saved:
             entry_type = "amdani" if extracted.is_income else "kharcha"
             result_text = (
-                f"Saved successfully. "
-                f"Farm: {extracted.farm_name}, "
-                f"Amount: {extracted.amount}, "
-                f"Category: {extracted.category}, "
-                f"Type: {entry_type}, "
-                f"Date: {extracted.expense_date}"
+                f"Saved: Farm={extracted.farm_name}, "
+                f"Amount={extracted.amount}, "
+                f"Category={extracted.category}, "
+                f"Type={entry_type}, "
+                f"Date={extracted.expense_date}"
             )
         else:
-            result_text = "Error saving expense. Please try again."
+            result_text = "Error saving. Please try again."
 
-    # GET SUMMARY
     elif extracted.action == "get_summary":
         summary = get_farm_summary(session_id, extracted.farm_name, extracted.season)
         result_text = (
@@ -309,9 +312,12 @@ def khata_node(state: AgentState) -> AgentState:
             f"Total Entries: {summary.get('expense_count', 0)}"
         )
 
-    # COMPARE FARMS
     elif extracted.action == "compare":
-        farm_names = extracted.farm_names or [extracted.farm_name]
+        farm_names = extracted.farm_names or []
+        if extracted.farm_name and extracted.farm_name not in farm_names:
+            farm_names.append(extracted.farm_name)
+        if not farm_names:
+            farm_names = get_all_farms(session_id)
         results = compare_farms(session_id, farm_names, extracted.season)
         lines = ["Comparison:"]
         for r in results:
@@ -323,7 +329,6 @@ def khata_node(state: AgentState) -> AgentState:
             )
         result_text = "\n".join(lines)
 
-    # TIME REPORT
     elif extracted.action == "time_report":
         start, end = get_date_range(extracted.time_period or "this_month")
         expenses = get_time_expenses(
@@ -332,7 +337,6 @@ def khata_node(state: AgentState) -> AgentState:
         result_text = f"Time period: {start} to {end}\n"
         result_text += format_expense_list(expenses)
 
-    # CATEGORY TOTAL
     elif extracted.action == "category_total":
         result = get_category_total(
             session_id,
@@ -343,12 +347,12 @@ def khata_node(state: AgentState) -> AgentState:
         result_text = (
             f"Category: {extracted.category}\n"
             f"Total: {result.get('total', 0)}\n"
-            f"Number of entries: {result.get('count', 0)}"
+            f"Entries: {result.get('count', 0)}"
         )
 
-    # ALL FARMS
     elif extracted.action == "all_farms":
         farms = get_all_farms(session_id)
+        # print(f"DEBUG all farms found: {farms}")
         if not farms:
             result_text = "Koi khet nahi mila. Pehle kuch kharcha darj karein."
         else:
@@ -358,12 +362,13 @@ def khata_node(state: AgentState) -> AgentState:
                 lines.append(
                     f"{farm}: "
                     f"Kharcha={summary.get('total_expense', 0)}, "
+                    f"Amdani={summary.get('total_income', 0)}, "
                     f"Profit={summary.get('net_profit', 0)}"
                 )
             result_text = "\n".join(lines)
 
     else:
-        result_text = "Samajh nahi aaya. Kripaya dobara likhein."
+        result_text = "Samajh nahi aaya. Dobara likhein jaise: 'khet 1 ka hisab batao'"
 
     state["tool_result"] = result_text
     state["tool_results"] = [result_text]

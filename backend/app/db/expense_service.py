@@ -59,7 +59,7 @@ def get_farm_expenses(
         query = client.table("expenses")\
             .select("*")\
             .eq("session_id", session_id)\
-            .eq("farm_name", farm_name.lower().strip())\
+            .eq("farm_name", (farm_name or "").lower().strip())\
             .order("expense_date", desc=True)\
             .limit(limit)
 
@@ -80,6 +80,8 @@ def get_farm_summary(
     farm_name: str,
     season: str = None
 ) -> dict:
+    if not farm_name:
+        return {}
     """
     Get total expense, total income, and net profit
     for one khet.
@@ -271,9 +273,10 @@ def get_category_total(
 
 def get_all_farms(session_id: str) -> List[str]:
     """
-    Get list of all khet names for this farmer.
-    Used when farmer asks "sabke kheton ka hisab"
+    Get list of all unique khet names for this farmer.
     """
+    # print(f"DEBUG get_all_farms called with session_id: {session_id}")
+
     try:
         response = client.table("expenses")\
             .select("farm_name")\
@@ -281,15 +284,17 @@ def get_all_farms(session_id: str) -> List[str]:
             .execute()
 
         if not response.data:
+            print(f"No farms found for session: {session_id}")
             return []
 
         # Get unique farm names
         farms = list(set(
             exp["farm_name"] for exp in response.data
+            if exp.get("farm_name")
         ))
+        print(f"Found farms: {farms}")
         return sorted(farms)
 
     except Exception as e:
         print(f"Error getting farms: {e}")
         return []
-
