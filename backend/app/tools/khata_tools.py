@@ -106,29 +106,17 @@ DATE RULES:
 
 Farmer message: {message}
 
-Return ONLY this JSON, no explanation, no markdown:
-{{
-    "action": "",
-    "farm_name": null,
-    "farm_names": null,
-    "amount": null,
-    "purpose": null,
-    "category": null,
-    "is_income": false,
-    "crop": null,
-    "season": "2024-25",
-    "expense_date": null,
-    "time_period": null,
-    "missing_fields": null,
-    "follow_up_question": null
-}}"""
+Extract all relevant fields from the farmer message based on the rules above.
+Be precise with amounts and farm names.
+For is_income: set true only when farmer is receiving money (selling crop, taking loan)."""
 
 
 def extract_khata_info(message: str) -> KhataExtraction:
     """
-    Ask Groq to extract structured expense info
-    from farmer's natural language message.
-    Returns KhataExtraction object.
+    Use LangChain structured output to extract
+    expense information from farmer's message.
+    Groq returns KhataExtraction object directly.
+    No manual JSON parsing needed.
     """
     today = date.today().isoformat()
     yesterday = (date.today() - timedelta(days=1)).isoformat()
@@ -141,32 +129,26 @@ def extract_khata_info(message: str) -> KhataExtraction:
         message=message
     )
 
-    response = llm.invoke([
-        SystemMessage(content="You are a JSON extraction assistant. Return only valid JSON."),
-        HumanMessage(content=prompt)
-    ])
-
-    # Clean response — remove markdown if Groq adds it
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    content = content.strip()
-
-    # Parse JSON into Pydantic model
     try:
-        data = json.loads(content)
-        return KhataExtraction(**data)
+        # with_structured_output tells Groq to return
+        # data matching KhataExtraction schema exactly
+        # No JSON parsing needed — LangChain handles it
+        llm_structured = llm.with_structured_output(KhataExtraction)
+
+        extracted = llm_structured.invoke([
+            SystemMessage(content="You are a farm expense data extractor."),
+            HumanMessage(content=prompt)
+        ])
+
+        return extracted
+
     except Exception as e:
-        print(f"Extraction error: {e}")
-        # Return incomplete if parsing fails
+        print(f"Structured output error: {e}")
         return KhataExtraction(
             action="incomplete",
             missing_fields=["all"],
             follow_up_question="Maaf karein, samajh nahi aaya. Kripaya dobara likhein jaise: 'khet 2 mein 2500 ka paani lagaya'"
         )
-    
 
 def get_date_range(time_period: str) -> tuple:
     """
