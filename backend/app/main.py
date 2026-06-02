@@ -2,8 +2,7 @@ import app.config
 # loads env vars and LangSmith setup first
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import chat
-
+from app.api.routes import chat, khata
 app = FastAPI(
     title="Kisaan AI",
     description="AI Farming Assistant for Rural India",
@@ -28,3 +27,4 @@ async def health():
     return {"status": "ok", "service": "kisaan-ai"}
 
 app.include_router(chat.router, prefix="/api")
+app.include_router(khata.router, prefix="/api")
