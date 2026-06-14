@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-const API = axios.create({ baseURL: "http://127.0.0.1:8000/api" });
-
+const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api"
+const API = axios.create({ baseURL: BASE_URL })
 // Get session ID from localStorage
 function getSessionId() {
   return localStorage.getItem("kisaan_session_id") || "";
@@ -79,7 +79,7 @@ function KhataPage() {
       const sessionId = getSessionId();
 
       // Use fetch with streaming same as ChatPage
-      const res = await fetch("http://127.0.0.1:8000/api/chat", {
+      const res = await fetch(`${BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

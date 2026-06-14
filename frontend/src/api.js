@@ -1,4 +1,6 @@
-const BASE_URL = "http://127.0.0.1:8000/api"
+// In production API is on same domain (/api)
+// In development it is on localhost:8000
+const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api"
 
 export async function sendMessage(
   sessionId,
@@ -15,11 +17,11 @@ export async function sendMessage(
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      session_id: sessionId,
-      message: message,
-      language: language || "hi",
+      session_id:   sessionId,
+      message:      message,
+      language:     language || "hi",
       image_base64: imageBase64 || null,
-      location: { city: "Lucknow" }
+      location:     { city: "Lucknow" }
     })
   })
 
@@ -48,7 +50,7 @@ export async function sendMessage(
           if (data.type === "done")  onDone()
 
         } catch (e) {
-          // Incomplete chunk — skipping it
+          // Incomplete chunk — skip it
         }
       }
     }
